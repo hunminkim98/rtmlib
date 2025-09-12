@@ -212,7 +212,12 @@ class PoseTracker:
 
             bboxes_current_frame = []
             track_ids_current_frame = []
-            for kpts in keypoints:
+            valid_indices = []
+            
+            # Use appropriate keypoints for bbox calculation
+            keypoints_for_tracking = keypoints2d if pose_model_name == 'RTMPose3d' else keypoints
+            
+            for i, kpts in enumerate(keypoints_for_tracking):
                 bbox = pose_to_bbox(kpts)
 
                 track_id, _ = self.track_by_iou(bbox)
@@ -220,19 +225,35 @@ class PoseTracker:
                 if track_id > -1:
                     track_ids_current_frame.append(track_id)
                     bboxes_current_frame.append(bbox)
+                    valid_indices.append(i)
 
             self.track_ids_last_frame = track_ids_current_frame
-            # reorder keypoints, scores according to track_id
-            keypoints = np.array([keypoints[i] for i in self.track_ids_last_frame])
-            scores = np.array([scores[i] for i in self.track_ids_last_frame])
+            
+            # reorder keypoints, scores according to valid tracked detections
+            keypoints = np.array([keypoints[i] for i in valid_indices])
+            scores = np.array([scores[i] for i in valid_indices])
+            
+            if pose_model_name == 'RTMPose3d':
+                keypoints_simcc = np.array([keypoints_simcc[i] for i in valid_indices])
+                keypoints2d = np.array([keypoints2d[i] for i in valid_indices])
 
         self.bboxes_last_frame = bboxes_current_frame
         self.frame_cnt += 1
 
         if pose_model_name == 'RTMPose3d':
-            return keypoints, scores, keypoints_simcc, keypoints2d
+            if self.tracking:
+                return keypoints, scores, keypoints_simcc, keypoints2d, self.track_ids_last_frame
+            else:
+                # No tracking, just return sequential indices
+                track_ids = list(range(len(keypoints)))
+                return keypoints, scores, keypoints_simcc, keypoints2d, track_ids
 
-        return keypoints, scores,
+        if self.tracking:
+            return keypoints, scores, self.track_ids_last_frame
+        else:
+            # No tracking, just return sequential indices
+            track_ids = list(range(len(keypoints)))
+            return keypoints, scores, track_ids
 
     def track_by_iou(self, bbox):
         """Get track id using IoU tracking greedily.

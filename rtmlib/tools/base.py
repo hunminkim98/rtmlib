@@ -78,9 +78,9 @@ class BaseTool(metaclass=ABCMeta):
                 model=model_onnx,
                 device_name='CPU',
                 config={'PERFORMANCE_HINT': 'LATENCY'})
+            # store input and all output ports so inference can return every output rather than only 2-dim
             self.input_layer = self.compiled_model.input(0)
-            self.output_layer0 = self.compiled_model.output(0)
-            self.output_layer1 = self.compiled_model.output(1)
+            self.output_layers = list(self.compiled_model.outputs)
 
         else:
             raise NotImplementedError
@@ -127,8 +127,7 @@ class BaseTool(metaclass=ABCMeta):
             outputs = self.session.run(sess_output, sess_input)
         elif self.backend == 'openvino':
             results = self.compiled_model(input)
-            output0 = results[self.output_layer0]
-            output1 = results[self.output_layer1]
-            outputs = [output0, output1]
+            # return outputs in the same order as the model's output ports
+            outputs = [results[ol] for ol in self.output_layers]
 
         return outputs
