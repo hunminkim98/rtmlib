@@ -13,19 +13,6 @@ from anytree import RenderTree
 from rtmlib.visualization.skeleton.coco133 import coco133
 
 
-def normalize_kpts(kpts):
-    """Convert keypoints to a numpy array with shape (P, J, C) when possible.
-    if single person, shape would be (J, C). So, we need to add a dimension for consistency.
-    Returns None if input is None or cannot be interpreted.
-    """
-    if kpts is None:
-        return None
-    k = np.asarray(kpts)
-    if k.ndim == 2:
-        k = k[np.newaxis, ...]
-    return k
-
-
 def apply_coordinate_transform(keypoints):
     """Apply coordinate system transformation to match MMPose format.
     
@@ -38,14 +25,17 @@ def apply_coordinate_transform(keypoints):
     if keypoints is not None and len(keypoints) > 0:
         # Step 1: Reorder axes from (X, Y, Z) to (X, Z, Y)
         # This swaps Y and Z coordinates to align with expected coordinate system
-        keypoints = keypoints[..., [0, 2, 1]]
+        # keypoints = keypoints[..., [0, 2, 1]]
         
         # Step 2: Invert the reordered Y and Z axes to match visualization coordinate system
         # This ensures proper orientation for 3D display and analysis
         # Note: Unlike MMPose's original "body3d_imgpose_demo.py" which inverts all axes,
         # we preserve X-axis to avoid horizontal flipping that occurs in this environment
-        keypoints[..., 1] = -keypoints[..., 1]  # Invert Y-axis (was original Z)
-        keypoints[..., 2] = -keypoints[..., 2]  # Invert Z-axis (was original Y)
+        # keypoints[..., 1] = -keypoints[..., 1]  # Invert Y-axis (was original Z)
+        # keypoints[..., 2] = -keypoints[..., 2]  # Invert Z-axis (was original Y)
+
+        keypoints = -keypoints[..., [0, 2, 1]]
+
     return keypoints
 
 
@@ -83,8 +73,9 @@ def make_trc_with_trc_data(trc_data, trc_path, fps=30):
     NumMarkers = (len(trc_data.columns)-1)//3
     keypoint_names = trc_data.columns[1::3]
     header_trc = ['PathFileType\t4\t(X/Y/Z)\t' + str(trc_path), 
-            'DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames', 
-            '\t'.join(map(str,[DataRate, CameraRate, NumFrames, NumMarkers, 'm', OrigDataRate, 0, NumFrames])),
+            'DataRate\tCameraRate\tNumFrames\tNumMarkers\tUnits\tOrigDataRate\tOrigDataStartFrame\tOrigNumFrames',
+            '\t'.join(map(str,[DataRate, CameraRate, NumFrames, NumMarkers, 'm', OrigDataRate, 0, NumFrames])), 
+            # '\t'.join(map(str,[DataRate, CameraRate, NumFrames, NumMarkers, 'simcc or px', OrigDataRate, 0, NumFrames])),
             'Frame#\tTime\t' + '\t\t\t'.join(keypoint_names) + '\t\t\t',
             '\t\t'+'\t'.join([f'X{i+1}\tY{i+1}\tZ{i+1}' for i in range(len(keypoint_names))])]
 
@@ -120,7 +111,7 @@ device = 'cuda'
 backend = 'onnxruntime'  # opencv, onnxruntime, openvino
 
 # choose input source: if `video` is set to a filepath, use it; otherwise use webcam (0)
-video = r'/Users/a/Desktop/cam01.mp4'  # set to None or '' to use webcam
+video = r'/Users/a/Desktop/gait2.mov'  # set to None or '' to use webcam
 if video:
     cap = cv2.VideoCapture(video)
 else:
@@ -187,12 +178,13 @@ while cap.isOpened():
     keypoints, scores, keypoints_simcc, keypoints_2d, track_ids = wholebody3d(frame)
 
     # Apply coordinate transformations to match MMPose format
-    if keypoints is not None:
-        keypoints = apply_coordinate_transform(keypoints.copy())
+    # Use keypoints_simcc to maintain original scale (like MMPose)
+    if keypoints_simcc is not None:
+        keypoints = apply_coordinate_transform(keypoints_simcc.copy())
         keypoints = apply_height_rebase(keypoints, disable_rebase=False)
 
     # collect 3D keypoints for TRC
-    kp_arr = normalize_kpts(keypoints)
+    kp_arr = np.array(keypoints)
     # initialize columns once we know number of joints
     if trc_columns is None and kp_arr is not None and len(kp_arr) > 0:
         # if RenderTree didn't give names, try coco133 mapping as fallback

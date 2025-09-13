@@ -4,18 +4,6 @@ import matplotlib.pyplot as plt
 from rtmlib.visualization.skeleton.coco133 import coco133
 
 
-def normalize_kpts(kpts):
-    """Convert keypoints to a numpy array with shape (P, J, C) when possible.
-    Returns None if input is None or cannot be interpreted.
-    """
-    if kpts is None:
-        return None
-    k = np.asarray(kpts)
-    if k.ndim == 2:
-        k = k[np.newaxis, ...]
-    return k
-
-
 # prepare mapping and edge list from coco133 for 3D visualization
 KP_NAME_TO_ID = {v['name']: v['id'] for v in coco133['keypoint_info'].values()}
 SKELETON_EDGES = []
@@ -73,7 +61,12 @@ class Visualizer3D:
         self.ax = self.fig.add_subplot(111, projection='3d')
 
     def update(self, kpts, scores=None, kpt_thr=0.3):
-        k = normalize_kpts(kpts)
+        if kpts is None:
+            k = None
+        else:
+            k = np.asarray(kpts)
+            if k.ndim == 2:
+                k = k[np.newaxis, ...]
         if k is None or k.shape[-1] < 3:
             # Clear visualization if no valid keypoints
             self.ax.clear()
@@ -167,7 +160,12 @@ class Visualizer3D:
                 pass
             return
         
-        k = normalize_kpts(keypoints_list)
+        if keypoints_list is None:
+            k = None
+        else:
+            k = np.asarray(keypoints_list)
+            if k.ndim == 2:
+                k = k[np.newaxis, ...]
         if k is None or k.shape[-1] < 3:
             return
             
